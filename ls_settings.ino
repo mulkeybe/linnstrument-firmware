@@ -2366,7 +2366,27 @@ void toggleNoteLights(int& notelights) {
 }
 
 boolean isArpeggiatorTempoTriplet() {
-  return Global.arpTempo == ArpEighthTriplet || Global.arpTempo == ArpSixteenthTriplet || Global.arpTempo == ArpThirtysecondTriplet;
+  return Global.arpTempo == ArpWholeTriplet ||
+         Global.arpTempo == ArpHalfTriplet ||
+         Global.arpTempo == ArpFourthTriplet ||
+         Global.arpTempo == ArpEighthTriplet ||
+         Global.arpTempo == ArpSixteenthTriplet ||
+         Global.arpTempo == ArpThirtysecondTriplet;
+}
+
+boolean isArpeggiatorSlowMode() {
+  switch (Global.arpTempo) {
+    case ArpWhole:
+    case ArpWholeTriplet:
+    case ArpHalf:
+    case ArpHalfTriplet:
+    case ArpHalfSwing:
+    case ArpFourth:
+    case ArpFourthTriplet:
+      return true;
+    default:
+      return false;
+  }
 }
 
 void handleTempoNewTouch() {
@@ -2759,43 +2779,59 @@ void handleGlobalSettingNewTouch() {
         break;
 
       case 13:
+      {
+        boolean slow = isArpeggiatorSlowMode();
+        boolean triplet = isArpeggiatorTempoTriplet();
+
         switch (sensorRow) {
           case 0:
             if (cell(sensorCol, 1).touched != untouchedCell) {
-              Global.arpTempo = ArpSixteenthSwing;
+              Global.arpTempo = slow ? ArpHalfSwing : ArpSixteenthSwing;
             }
             else {
-              if (isArpeggiatorTempoTriplet()) {
-                Global.arpTempo = ArpEighthTriplet;
-              }
-              else {
-                Global.arpTempo = ArpEighth;
-              }
+              Global.arpTempo = slow
+                  ? (triplet ? ArpWholeTriplet : ArpWhole)
+                  : (triplet ? ArpEighthTriplet : ArpEighth);
             }
             break;
+
           case 1:
             if (cell(sensorCol, 0).touched != untouchedCell) {
-              Global.arpTempo = ArpSixteenthSwing;
+              Global.arpTempo = slow ? ArpHalfSwing : ArpSixteenthSwing;
             }
             else {
-              if (isArpeggiatorTempoTriplet()) {
-                Global.arpTempo = ArpSixteenthTriplet;
-              }
-              else {
-                Global.arpTempo = ArpSixteenth;
-              }
+              Global.arpTempo = slow
+                  ? (triplet ? ArpHalfTriplet : ArpHalf)
+                  : (triplet ? ArpSixteenthTriplet : ArpSixteenth);
             }
             break;
+
           case 2:
-            if (isArpeggiatorTempoTriplet()) {
-              Global.arpTempo = ArpThirtysecondTriplet;
-            }
-            else {
-              Global.arpTempo = ArpThirtysecond;
-            }
+            Global.arpTempo = slow
+                ? (triplet ? ArpFourthTriplet : ArpFourth)
+                : (triplet ? ArpThirtysecondTriplet : ArpThirtysecond);
             break;
+
           case 3:
             switch (Global.arpTempo) {
+              case ArpWhole:
+                Global.arpTempo = ArpWholeTriplet;
+                break;
+              case ArpWholeTriplet:
+                Global.arpTempo = ArpWhole;
+                break;
+              case ArpHalf:
+                Global.arpTempo = ArpHalfTriplet;
+                break;
+              case ArpHalfTriplet:
+                Global.arpTempo = ArpHalf;
+                break;
+              case ArpFourth:
+                Global.arpTempo = ArpFourthTriplet;
+                break;
+              case ArpFourthTriplet:
+                Global.arpTempo = ArpFourth;
+                break;
               case ArpEighth:
                 Global.arpTempo = ArpEighthTriplet;
                 break;
@@ -2815,12 +2851,12 @@ void handleGlobalSettingNewTouch() {
                 Global.arpTempo = ArpThirtysecond;
                 break;
               default:
-                // no-op
                 break;
             }
             break;
         }
         break;
+      }
 
       case 14:
         switch (sensorRow) {
@@ -2840,7 +2876,29 @@ void handleGlobalSettingNewTouch() {
               Global.arpOctave = 2;
             }
             break;
-          case 3:
+              case 2:
+            switch (Global.arpTempo) {
+              case ArpEighth: Global.arpTempo = ArpWhole; break;
+              case ArpEighthTriplet: Global.arpTempo = ArpWholeTriplet; break;
+              case ArpSixteenth: Global.arpTempo = ArpHalf; break;
+              case ArpSixteenthTriplet: Global.arpTempo = ArpHalfTriplet; break;
+              case ArpSixteenthSwing: Global.arpTempo = ArpHalfSwing; break;
+              case ArpThirtysecond: Global.arpTempo = ArpFourth; break;
+              case ArpThirtysecondTriplet: Global.arpTempo = ArpFourthTriplet; break;
+
+              case ArpWhole: Global.arpTempo = ArpEighth; break;
+              case ArpWholeTriplet: Global.arpTempo = ArpEighthTriplet; break;
+              case ArpHalf: Global.arpTempo = ArpSixteenth; break;
+              case ArpHalfTriplet: Global.arpTempo = ArpSixteenthTriplet; break;
+              case ArpHalfSwing: Global.arpTempo = ArpSixteenthSwing; break;
+              case ArpFourth: Global.arpTempo = ArpThirtysecond; break;
+              case ArpFourthTriplet: Global.arpTempo = ArpThirtysecondTriplet; break;
+
+              default: break;
+            }
+            break;
+
+      case 3:
             if (!isSyncedToMidiClock()) {
               lightLed(14, 3);
 

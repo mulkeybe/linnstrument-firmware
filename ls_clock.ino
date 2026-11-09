@@ -23,6 +23,7 @@ const unsigned long INTERNAL_CLOCK_UNIT_BASE = 2500000;  // 1000000 ( microsecon
 unsigned long prevClockTimerCount;                       // the last time the microsecond timer was updated for the musical clock
 
 unsigned long lastInternalClockMoment;                   // the last time the internal clock stepped
+boolean arpClockNeedsSync = false;
 unsigned char lastInternalClockCount;                    // the count of the internal clock steps, from 0 to 23
 
 signed char previousMidiClockCount;                      // the previous MIDI clock count, used to detect if a change really occurred
@@ -32,6 +33,7 @@ void initializeClock() {
   prevClockTimerCount = micros();
 
   clock24PPQ = 0;
+  arpClockPhase = 0;
   previousMidiClockCount = 0;
   lastInternalClockCount = 0;
 
@@ -85,6 +87,20 @@ inline boolean checkUpdateClock(unsigned long now) {
     else {
       return false;
     }
+  }
+
+  // Extend the accepted 24 PPQ clock position to a 192-tick
+  // arpeggiator phase, preserving the quarter-note boundaries.
+  if (arpClockNeedsSync) {
+    // Match the first accepted clock position after synchronization.
+    arpClockPhase = (arpClockPhase / 24) * 24 + clockCount;
+    arpClockPhase %= 192;
+    arpClockNeedsSync = false;
+  }
+  else {
+    unsigned short clockAdvance =
+        (clockCount - clock24PPQ + 24) % 24;
+    arpClockPhase = (arpClockPhase + clockAdvance) % 192;
   }
 
   clock24PPQ = clockCount;

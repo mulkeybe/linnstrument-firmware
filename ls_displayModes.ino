@@ -1811,34 +1811,52 @@ void paintGlobalSettingsDisplay() {
 
     switch (Global.arpTempo) {
       case ArpSixteenthSwing:
+      case ArpHalfSwing:
         lightLed(13, 0);
         lightLed(13, 1);
         break;
+
       case ArpEighth:
+      case ArpWhole:
         lightLed(13, 0);
         break;
+
       case ArpEighthTriplet:
+      case ArpWholeTriplet:
         lightLed(13, 0);
         lightLed(13, 3);
         break;
+
       case ArpSixteenth:
+      case ArpHalf:
         lightLed(13, 1);
         break;
+
       case ArpSixteenthTriplet:
+      case ArpHalfTriplet:
         lightLed(13, 1);
         lightLed(13, 3);
         break;
+
       case ArpThirtysecond:
+      case ArpFourth:
         lightLed(13, 2);
         break;
+
       case ArpThirtysecondTriplet:
+      case ArpFourthTriplet:
         lightLed(13, 2);
         lightLed(13, 3);
         break;
-      case ArpFourth:
+
       case ArpSixtyfourthTriplet:
-        // not available as panel settings
+        // Not directly available through panel controls.
         break;
+    }
+
+    // Illuminate the Slow Mode toggle when a slow rate is selected.
+    if (isArpeggiatorSlowMode()) {
+      lightLed(14, 2);
     }
 
     // show the arpeggiator octave

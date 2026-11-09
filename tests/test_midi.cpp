@@ -120,3 +120,32 @@ TEST(nrpn_query_answers_with_the_value_and_a_null_rpn) {
     CHECK_EQ(out[16], 100);
   }
 }
+
+TEST(nrpn_236_selects_and_reports_all_arpeggiator_rates) {
+  linn::reset();
+
+  for (int value = 0; value < 15; ++value) {
+    receivedNrpn(236, value, 0);
+
+    CHECK_EQ((int)Global.arpTempo, (int)arpTempoOrder[value]);
+    CHECK_EQ(isArpeggiatorSlowMode(), value <= 6);
+
+    // Query the currently selected rate through NRPN 299.
+    host::clearSerialOutput();
+    receivedNrpn(299, 236, 0);
+    linn::drainMidi();
+
+    std::vector<uint8_t> out = host::serialOutput();
+
+    CHECK_EQ(out.size(), 18);
+    if (out.size() == 18) {
+      CHECK_EQ(out[2] * 128 + out[5], 236);
+      CHECK_EQ(out[8] * 128 + out[11], value);
+    }
+  }
+
+  // An out-of-range value must leave the selection unchanged.
+  ArpeggiatorStepTempo previous = Global.arpTempo;
+  receivedNrpn(236, 15, 0);
+  CHECK_EQ((int)Global.arpTempo, (int)previous);
+}

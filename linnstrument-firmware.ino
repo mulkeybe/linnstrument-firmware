@@ -742,6 +742,12 @@ enum ArpeggiatorStepTempo {
   ArpThirtysecond = 6,
   ArpThirtysecondTriplet = 7,
   ArpSixtyfourthTriplet = 8,
+  ArpWhole = 9,
+  ArpWholeTriplet = 10,
+  ArpHalf = 11,
+  ArpHalfTriplet = 12,
+  ArpFourthTriplet = 13,
+  ArpHalfSwing = 14,
 };
 
 enum ArpeggiatorDirection {
@@ -1080,6 +1086,7 @@ boolean controlModeActive = false;                  // indicates whether control
 
 unsigned long lastTouchMoment = 0;                  // last time someone touched LinnStrument in milliseconds
 
+unsigned short arpClockPhase = 0;
 unsigned short clock24PPQ = 0;                      // the current clock in 24PPQ, either internal or synced to incoming MIDI clock
 
 short restrictedRow = -1;                           // temporarily restrict touches to a particular row

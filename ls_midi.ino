@@ -130,6 +130,8 @@ void handleMidiInput(unsigned long nowMicros) {
 
         if (!receivedSongPositionPointer) {
           midiClockMessageCount = 1;
+          arpClockPhase = 0;
+          arpClockNeedsSync = true;
           setSequencerSongPositionPointer(0);
         }
 
@@ -146,6 +148,8 @@ void handleMidiInput(unsigned long nowMicros) {
         sequencersTurnOff(false);
 
         midiClockStatus = midiClockOff;
+        arpClockPhase = 0;
+        arpClockNeedsSync = true;
         midiClockMessageCount = 0;
         lastMidiClockTime = 0;
         initialMidiClockMessageCount = 0;
@@ -300,6 +304,8 @@ void handleMidiInput(unsigned long nowMicros) {
       {
         unsigned pos = midiData2 << 7 | midiData1;
         midiClockMessageCount = (pos * 6) % 24 + 1;
+        arpClockPhase = (pos * 6UL) % 192;
+        arpClockNeedsSync = true;
 
         setSequencerSongPositionPointer(pos);
         break;
@@ -1145,9 +1151,10 @@ void receivedNrpn(int parameter, int value, int channel) {
       }
       break;
     // Global Arp Tempo Note Value
+    // MIDI values are ordered from slowest to fastest.
     case 236:
-      if (inRange(value, 1, 7)) {
-        Global.arpTempo = (ArpeggiatorStepTempo)value;
+      if (inRange(value, 0, 14)) {
+        Global.arpTempo = (ArpeggiatorStepTempo)arpTempoOrder[value];
       }
       break;
     // Global Arp Octave Extension
@@ -1613,7 +1620,13 @@ void sendNrpnParameter(int parameter, int channel) {
       value = Global.arpDirection;
       break;
     case 236:
-      value = Global.arpTempo;
+      // Convert the internal rate to the ordered MIDI value.
+      for (byte i = 0; i < 15; ++i) {
+        if (arpTempoOrder[i] == Global.arpTempo) {
+          value = i;
+          break;
+        }
+      }
       break;
     case 237:
       value = Global.arpOctave;

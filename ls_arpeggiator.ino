@@ -133,28 +133,86 @@ inline void checkAdvanceArpeggiator() {
   checkAdvanceArpeggiatorForSplit(RIGHT);
 }
 
-byte arpTempoChoices[9] {
-   24, // ArpFourth
-   12, // ArpEighth
-   8,  // ArpEighthTriplet
-   6,  // ArpSixteenth
-   TEMPO_ARP_SIXTEENTH_SWING, // ArpSixteenthSwing
-   4,  // ArpSixteenthTriplet
-   3,  // ArpThirtysecond
-   2,  // ArpThirtysecondTriplet
-   1   // ArpSixtyfourthTriplet
- };
+// Clock pulses per arpeggiator step, indexed by ArpeggiatorStepTempo.
+// Special values identify swing rates.
+#define TEMPO_ARP_HALF_SWING 0xfe
+
+const byte arpTempoChoices[15] = {
+  24, // ArpFourth
+  12, // ArpEighth
+   8, // ArpEighthTriplet
+   6, // ArpSixteenth
+  TEMPO_ARP_SIXTEENTH_SWING, // ArpSixteenthSwing
+   4, // ArpSixteenthTriplet
+   3, // ArpThirtysecond
+   2, // ArpThirtysecondTriplet
+   1, // ArpSixtyfourthTriplet
+  96, // ArpWhole
+  64, // ArpWholeTriplet
+  48, // ArpHalf
+  32, // ArpHalfTriplet
+  16, // ArpFourthTriplet
+  TEMPO_ARP_HALF_SWING // ArpHalfSwing
+};
+
+// Ordered slowest to fastest for Low Row speed adjustment.
+const byte arpTempoOrder[15] = {
+  ArpWhole,
+  ArpWholeTriplet,
+  ArpHalf,
+  ArpHalfSwing,
+  ArpHalfTriplet,
+  ArpFourth,
+  ArpFourthTriplet,
+  ArpEighth,
+  ArpEighthTriplet,
+  ArpSixteenth,
+  ArpSixteenthSwing,
+  ArpSixteenthTriplet,
+  ArpThirtysecond,
+  ArpThirtysecondTriplet,
+  ArpSixtyfourthTriplet
+};
 
 inline void checkAdvanceArpeggiatorForSplit(byte split) {
-  if (isArpeggiatorEnabled(split)) {
 
-    byte combinedTempoIndex = constrain(Global.arpTempo + arpTempoDelta[split], 0, 8);
-    byte combinedTempo = arpTempoChoices[combinedTempoIndex];
+  if (!isArpeggiatorEnabled(split)) {
+    return;
+  }
 
-    if ((combinedTempo == TEMPO_ARP_SIXTEENTH_SWING && ((clock24PPQ % 12 == 0) || (clock24PPQ % 12 == 7))) ||  // we need to handle swing differently since it's irregular
-        (combinedTempo != TEMPO_ARP_SIXTEENTH_SWING && (clock24PPQ % combinedTempo == 0 ))) {
-      advanceArpeggiatorForSplit(split);
+  // Find the selected rate in the slowest-to-fastest ordering.
+  int tempoIndex = 0;
+  for (int i = 0; i < 15; ++i) {
+    if (arpTempoOrder[i] == Global.arpTempo) {
+      tempoIndex = i;
+      break;
     }
+  }
+
+  // Apply the Low Row speed adjustment.
+  int combinedIndex = constrain(
+      tempoIndex + arpTempoDelta[split], 0, 14);
+
+  byte tempo = arpTempoChoices[arpTempoOrder[combinedIndex]];
+
+  boolean advance = false;
+
+  if (tempo == TEMPO_ARP_SIXTEENTH_SWING) {
+    // Preserve the original 7/5-pulse swing.
+    advance = (arpClockPhase % 12 == 0 ||
+               arpClockPhase % 12 == 7);
+  }
+  else if (tempo == TEMPO_ARP_HALF_SWING) {
+    // Same swing proportion at half-note speed.
+    advance = (arpClockPhase % 96 == 0 ||
+               arpClockPhase % 96 == 56);
+  }
+  else {
+    advance = (arpClockPhase % tempo == 0);
+  }
+
+  if (advance) {
+    advanceArpeggiatorForSplit(split);
   }
 }
 
