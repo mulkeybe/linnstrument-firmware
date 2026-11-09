@@ -159,7 +159,16 @@ void initializeStorage() {
 }
 
 void storeSettings() {
-  if (!sequencerIsRunning()) {
+  // Avoid interrupting timing during sequencer or arpeggiator playback.
+  boolean arpeggiatorRunning = false;
+  for (byte split = 0; split < NUMSPLITS; ++split) {
+    if (isArpeggiatorEnabled(split) && noteTouchMapping[split].noteCount > 0) {
+      arpeggiatorRunning = true;
+      break;
+    }
+  }
+
+  if (!sequencerIsRunning() && !arpeggiatorRunning) {
     Project.tempo = FXD4_TO_INT(fxd4CurrentTempo);
     writeSettingsToFlash();
   }
@@ -850,7 +859,15 @@ void handleControlButtonNewTouch() {
 
   switch (sensorRow) {                                 // which control button is it?
     case GLOBAL_SETTINGS_ROW:                          // global settings button presssed
-      resetAllTouches();
+      // Preserve latched or legato arpeggiator notes in Global Settings.
+      // Other splits retain the normal touch-reset behavior.
+      for (byte split = 0; split < NUMSPLITS; ++split) {
+        if (!(isArpeggiatorEnabled(split) &&
+              (isSwitchLatchPressed(split) || isSwitchLegatoPressed(split)))) {
+          midiSendNoteOffForAllTouches(split);
+          noteTouchMapping[split].initialize(split);
+        }
+      }
       lightLed(0, 0);                                  // light the button
       setDisplayMode(displayGlobal);                   // change to global settings display mode
       resetNumericDataChange();
@@ -858,7 +875,14 @@ void handleControlButtonNewTouch() {
       break;
 
     case SPLIT_ROW:                                    // SPLIT button pressed
-      resetAllTouches();
+      // Preserve Latch or Legato arpeggios while accessing Split.
+      for (byte split = 0; split < NUMSPLITS; ++split) {
+        if (!(isArpeggiatorEnabled(split) &&
+              (isSwitchLatchPressed(split) || isSwitchLegatoPressed(split)))) {
+          midiSendNoteOffForAllTouches(split);
+          noteTouchMapping[split].initialize(split);
+        }
+      }
       splitButtonDown = true;
       changedSplitPoint = false;
       setDisplayMode(displaySplitPoint);
@@ -894,14 +918,28 @@ void handleControlButtonNewTouch() {
       break;
   
     case OCTAVE_ROW:                                   // OCTAVE button pressed
-      resetAllTouches();
+      // Preserve active Latch or Legato arpeggios.
+      for (byte split = 0; split < NUMSPLITS; ++split) {
+        if (!(isArpeggiatorEnabled(split) &&
+              (isSwitchLatchPressed(split) || isSwitchLegatoPressed(split)))) {
+          midiSendNoteOffForAllTouches(split);
+          noteTouchMapping[split].initialize(split);
+        }
+      }
       setLed(0, OCTAVE_ROW, globalColor, cellOn);
       setDisplayMode(displayOctaveTranspose);
       updateDisplay();
       break;
 
     case VOLUME_ROW:                                   // displayVolume button pressed
-      resetAllTouches();
+      // Preserve Latch or Legato arpeggios while adjusting volume.
+      for (byte split = 0; split < NUMSPLITS; ++split) {
+        if (!(isArpeggiatorEnabled(split) &&
+              (isSwitchLatchPressed(split) || isSwitchLegatoPressed(split)))) {
+          midiSendNoteOffForAllTouches(split);
+          noteTouchMapping[split].initialize(split);
+        }
+      }
       setLed(0, VOLUME_ROW, globalColor, cellOn);
       setDisplayMode(displayVolume);
       updateDisplay();
@@ -3267,9 +3305,15 @@ void handleGlobalSettingRelease() {
         if (Global.splitActive) {
           midiSendAllNotesOff(LEFT);
           midiSendAllNotesOff(RIGHT);
+          resetArpeggiatorState(LEFT);
+          resetArpeggiatorState(RIGHT);
+          noteTouchMapping[LEFT].initialize(LEFT);
+          noteTouchMapping[RIGHT].initialize(RIGHT);
         }
         else {
           midiSendAllNotesOff(Global.currentPerSplit);
+          resetArpeggiatorState(Global.currentPerSplit);
+          noteTouchMapping[Global.currentPerSplit].initialize(Global.currentPerSplit);
         }
         delayUsec(100000);
         clearLed(16, 0);

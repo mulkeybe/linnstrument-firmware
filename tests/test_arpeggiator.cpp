@@ -321,3 +321,281 @@ TEST(arpeggiator_skipped_clock_positions) {
 
   linn::midiIn({0xFC});
 }
+
+TEST(arpeggiator_latch_survives_global_settings) {
+  holdTwoNotes();
+
+  Global.arpDirection = ArpUp;
+  switchTargetEnabled[LEFT][ASSIGNED_LATCH] = true;
+
+  // Release the physical pads; Latch should retain both notes.
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Enter Global Settings through the normal touch handler.
+  linn::press(0, GLOBAL_SETTINGS_ROW, 2000, 2000, 400);
+
+  CHECK_EQ(displayMode, displayGlobal);
+  CHECK(isSwitchLatchPressed(LEFT));
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Verify the arpeggiator can still produce a note.
+  advanceArpeggiatorForSplit(LEFT);
+
+  auto notes = arpNotes();
+  int noteOns = 0;
+  for (const auto& note : notes) {
+    if ((note[0] & 0xF0) == 0x90) ++noteOns;
+  }
+  CHECK_EQ(noteOns, 1);
+
+  // Leaving Global Settings must preserve the latched notes.
+  linn::release(0, GLOBAL_SETTINGS_ROW);
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+}
+
+TEST(arpeggiator_global_settings_cleans_unlatched_split) {
+  holdTwoNotes();
+
+  // Left split: latched arpeggiator.
+  switchTargetEnabled[LEFT][ASSIGNED_LATCH] = true;
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Right split: unlatched arpeggiator with two notes.
+  Global.splitActive = true;
+  Split[RIGHT].arpeggiator = true;
+  switchTargetEnabled[RIGHT][ASSIGNED_LATCH] = false;
+
+  // Use a direct mapping setup to avoid assumptions about
+  // the instrument's split-point coordinates.
+  noteTouchMapping[RIGHT].noteOn(60, 1, 0, 0);
+  noteTouchMapping[RIGHT].noteOn(64, 1, 0, 0);
+
+  CHECK_EQ(noteTouchMapping[RIGHT].noteCount, 2);
+
+  linn::press(0, GLOBAL_SETTINGS_ROW, 2000, 2000, 400);
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+  CHECK_EQ(noteTouchMapping[RIGHT].noteCount, 0);
+  CHECK(isSwitchLatchPressed(LEFT));
+  CHECK(!isSwitchLatchPressed(RIGHT));
+}
+
+TEST(arpeggiator_latch_all_notes_off_in_global_settings) {
+  holdTwoNotes();
+
+  switchTargetEnabled[LEFT][ASSIGNED_LATCH] = true;
+
+  // Release the physical notes while Latch is active.
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Enter Global Settings.
+  linn::press(0, GLOBAL_SETTINGS_ROW, 2000, 2000, 400);
+  CHECK_EQ(displayMode, displayGlobal);
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Press the All Notes Off button in Global Settings.
+  linn::press(16, 0, 2000, 2000, 400);
+  linn::release(16, 0);
+
+  // The stored notes and playback state must be cleared.
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 0);
+  CHECK_EQ(playingArpNote[LEFT], -1);
+  CHECK_EQ(stepArpNote[LEFT], -1);
+
+  // Latch remains enabled.
+  CHECK(isSwitchLatchPressed(LEFT));
+
+  // Advancing the arpeggiator must not restart the old notes.
+  arpNotes();
+  advanceArpeggiatorForSplit(LEFT);
+
+  auto notes = arpNotes();
+  int noteOns = 0;
+  for (const auto& note : notes) {
+    if ((note[0] & 0xF0) == 0x90 && note[2] > 0) {
+      ++noteOns;
+    }
+  }
+  CHECK_EQ(noteOns, 0);
+
+  linn::release(0, GLOBAL_SETTINGS_ROW);
+}
+
+TEST(arpeggiator_legato_survives_global_settings) {
+  holdTwoNotes();
+
+  switchTargetEnabled[LEFT][ASSIGNED_LEGATO] = true;
+
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  linn::press(0, GLOBAL_SETTINGS_ROW, 2000, 2000, 400);
+
+  CHECK_EQ(displayMode, displayGlobal);
+  CHECK(isSwitchLegatoPressed(LEFT));
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Discard MIDI generated while entering Global Settings.
+  arpNotes();
+
+  advanceArpeggiatorForSplit(LEFT);
+
+  auto notes = arpNotes();
+  int noteOns = 0;
+  for (const auto& note : notes) {
+    if ((note[0] & 0xF0) == 0x90 && note[2] > 0) {
+      ++noteOns;
+    }
+  }
+  CHECK(noteOns > 0);
+
+  linn::release(0, GLOBAL_SETTINGS_ROW);
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+}
+
+TEST(arpeggiator_legato_replaces_previous_notes) {
+  holdTwoNotes();
+
+  switchTargetEnabled[LEFT][ASSIGNED_LEGATO] = true;
+
+  // Release the original two notes.
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Play a new note. Legato should discard the old captured notes.
+  linn::press(9, 3, 2000, 2000, 400);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 1);
+
+  // The replacement note remains captured after release.
+  linn::release(9, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 1);
+}
+
+TEST(arpeggiator_legato_survives_octave_transpose_menu) {
+  holdTwoNotes();
+
+  switchTargetEnabled[LEFT][ASSIGNED_LEGATO] = true;
+
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Enter Octave/Transpose.
+  linn::press(0, OCTAVE_ROW, 2000, 2000, 400);
+
+  CHECK_EQ(displayMode, displayOctaveTranspose);
+  CHECK(isSwitchLegatoPressed(LEFT));
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  arpNotes();
+  advanceArpeggiatorForSplit(LEFT);
+
+  auto notes = arpNotes();
+  int noteOns = 0;
+  for (const auto& note : notes) {
+    if ((note[0] & 0xF0) == 0x90 && note[2] > 0) {
+      ++noteOns;
+    }
+  }
+  CHECK(noteOns > 0);
+
+  // Leaving the menu must retain the captured notes.
+  linn::release(0, OCTAVE_ROW);
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+}
+
+TEST(arpeggiator_legato_survives_volume_menu) {
+  holdTwoNotes();
+
+  switchTargetEnabled[LEFT][ASSIGNED_LEGATO] = true;
+
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Enter Volume settings.
+  linn::press(0, VOLUME_ROW, 2000, 2000, 400);
+
+  CHECK_EQ(displayMode, displayVolume);
+  CHECK(isSwitchLegatoPressed(LEFT));
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Verify arpeggiator playback continues.
+  arpNotes();
+  advanceArpeggiatorForSplit(LEFT);
+
+  auto notes = arpNotes();
+  int noteOns = 0;
+  for (const auto& note : notes) {
+    if ((note[0] & 0xF0) == 0x90 && note[2] > 0) {
+      ++noteOns;
+    }
+  }
+  CHECK(noteOns > 0);
+
+  // Leaving Volume must retain the captured notes.
+  linn::release(0, VOLUME_ROW);
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+}
+
+TEST(arpeggiator_legato_survives_split_menu) {
+  holdTwoNotes();
+
+  switchTargetEnabled[LEFT][ASSIGNED_LEGATO] = true;
+
+  linn::release(5, 3);
+  linn::release(7, 3);
+  arpNotes();
+
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Enter the Split menu.
+  linn::press(0, SPLIT_ROW, 2000, 2000, 400);
+
+  CHECK_EQ(displayMode, displaySplitPoint);
+  CHECK(isSwitchLegatoPressed(LEFT));
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+
+  // Verify that playback continues.
+  arpNotes();
+  advanceArpeggiatorForSplit(LEFT);
+
+  auto notes = arpNotes();
+  int noteOns = 0;
+  for (const auto& note : notes) {
+    if ((note[0] & 0xF0) == 0x90 && note[2] > 0) {
+      ++noteOns;
+    }
+  }
+  CHECK(noteOns > 0);
+
+  // Leaving Split must retain the captured notes.
+  linn::release(0, SPLIT_ROW);
+  CHECK_EQ(noteTouchMapping[LEFT].noteCount, 2);
+}

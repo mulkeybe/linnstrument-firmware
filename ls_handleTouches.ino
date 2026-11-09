@@ -1012,15 +1012,19 @@ boolean handleXYZupdate() {
             }
           }
 
-          // calculate the average pitch of the notes that exclude the highest note
-          averagePitch = (averagePitch - highestNotePitch) / (averageDivider - 1);
+          // Only average when another physical touch was found.
+          // Latched or legato notes may remain mapped after release.
+          if (averageDivider > 1) {
+            // calculate the average pitch of the notes that exclude the highest note
+            averagePitch = (averagePitch - highestNotePitch) / (averageDivider - 1);
 
-          // use the pitch that has the most influence
-          if (abs(highestNotePitch) > abs(averagePitch)) {
-            pitch = highestNotePitch;
-          }
-          else {
-            pitch = averagePitch;
+            // use the pitch that has the most influence
+            if (abs(highestNotePitch) > abs(averagePitch)) {
+              pitch = highestNotePitch;
+            }
+            else {
+              pitch = averagePitch;
+            }
           }
         }
 
