@@ -39,7 +39,7 @@ short midiSysExLength = -1;
 // MIDI Clock State
 const int32_t MIDI_CLOCK_UNIT = 2500000;    // 1000000 ( microsecond) * 60 ( minutes - bpm) / 24 ( frames per beat)
 const int32_t MIDI_CLOCK_MIN_DELTA = 6756;  // maximum 370 BPM (taking a little margin to allow for clock fluctuations)
-const byte MIDI_CLOCK_SAMPLES = 6;
+const byte MIDI_CLOCK_SAMPLES = 24;
 const int32_t FXD4_MIDI_CLOCK_SAMPLES = FXD4_FROM_INT(MIDI_CLOCK_SAMPLES);
 
 enum MidiClock {
@@ -55,6 +55,37 @@ byte midiClockMessageCount = 0;                            // the number of MIDI
 byte initialMidiClockMessageCount = 0;                     // the first MIDI clock messages, counted until the minimum number of samples have been received
 boolean receivedSongPositionPointer = false;               // tracks whether a song position pointer message was received before the MIDI clock start
 boolean standaloneMidiClockRunning = false;                // indicates whether the MIDI Clock is sending data in a standalone fashion, without sequencer
+
+
+// Called by the clock engine to detect loss of external MIDI Clock.
+void checkAutoClockTimeout(unsigned long now) {
+  // Use current time, not an earlier task-loop timestamp.
+  now = micros();
+  // Squarp-style 2-second missing-clock timeout.
+  if (autoClockMode && externalClockActive &&
+      lastMidiClockTime != 0 &&
+      calcTimeDelta(now, lastMidiClockTime) > 2000000UL) {
+    externalClockActive = false;
+    midiClockStatus = midiClockOff;
+    midiClockMessageCount = 0;
+    lastMidiClockTime = 0;
+    initialMidiClockMessageCount = 0;
+    resetClockAdvancement(now);
+    lastInternalClockCount = clock24PPQ;
+    arpClockNeedsSync = false;
+
+    if (displayMode == displayGlobal ||
+        displayMode == displayGlobalWithTempo) {
+      updateDisplay();
+    }
+  }
+}
+
+// Return the measured external tempo without changing internal BPM.
+int32_t getExternalMidiTempo() {
+  return fxd4MidiTempoAverage;
+}
+
 
 byte lastRpnMsb = 127;
 byte lastRpnLsb = 127;
@@ -128,32 +159,62 @@ void handleMidiInput(unsigned long nowMicros) {
         midiMessageBytes = 1;
         midiMessageIndex = 1;
 
-        if (!receivedSongPositionPointer) {
-          midiClockMessageCount = 1;
-          arpClockPhase = 0;
-          arpClockNeedsSync = true;
-          setSequencerSongPositionPointer(0);
+        // Only Auto uses incoming MIDI transport to synchronize
+        // its clock. Internal mode keeps its own clock phase.
+        if (autoClockMode) {
+          if (!receivedSongPositionPointer &&
+              (d == MIDIStart || midiClockStatus == midiClockOff)) {
+            midiClockMessageCount = 1;
+          }
+
+          // MIDI Start deliberately realigns the arpeggiator.
+          // MIDI Continue preserves its existing phase.
+          if (d == MIDIStart) {
+            arpClockPhase = 0;
+            arpClockNeedsSync = true;
+          }
+
+          midiClockStatus = midiClockStart;
+          if (!externalClockActive) {
+            lastMidiClockTime = 0;
+            initialMidiClockMessageCount = 0;
+          }
+          resetClockAdvancement(nowMicros);
         }
 
-        midiClockStatus = midiClockStart;
-        fxd4MidiTempoAverage = fxd4CurrentTempo;
-        lastMidiClockTime = 0;
-        initialMidiClockMessageCount = 0;
-        resetClockAdvancement(nowMicros);
+        if (transportReceiveEnabled) {
+          transportArpRunning = true;
+          if (!receivedSongPositionPointer) {
+            setSequencerSongPositionPointer(0);
+          }
+          if (!autoClockMode) {
+            sequencersTurnOn();
+          }
+        }
         break;
       case MIDIStop:
         midiMessageBytes = 1;
         midiMessageIndex = 1;
 
-        sequencersTurnOff(false);
+        if (transportReceiveEnabled) {
+          sequencersTurnOff(false);
+          transportArpRunning = false;
+          for (byte split = 0; split < NUMSPLITS; ++split) {
+            sendArpeggiatorStepMidiOff(split);
+            playingArpNote[split] = -1;
+            playingArpChannel[split] = -1;
+          }
+        }
 
-        midiClockStatus = midiClockOff;
-        arpClockPhase = 0;
-        arpClockNeedsSync = true;
-        midiClockMessageCount = 0;
-        lastMidiClockTime = 0;
-        initialMidiClockMessageCount = 0;
-        resetClockAdvancement(nowMicros);
+        // Auto preserves the clock and arpeggiator phase.
+        // Missing pulses trigger the normal 2-second fallback.
+        if (!autoClockMode) {
+          midiClockStatus = midiClockOff;
+          midiClockMessageCount = 0;
+          lastMidiClockTime = 0;
+          initialMidiClockMessageCount = 0;
+          // Do not reset the internal clock on MIDI Stop.
+        }
         break;
       case MIDISongPositionPointer:
         midiMessageBytes = 3;
@@ -162,22 +223,58 @@ void handleMidiInput(unsigned long nowMicros) {
         break;
       case MIDITimingClock:
       {
+        // Timestamp this F8 pulse when it is processed.
+        nowMicros = micros();
         midiMessageBytes = 1;
         midiMessageIndex = 1;
 
-        if (midiClockStatus != midiClockOff) {
+        if (midiClockStatus != midiClockOff || autoClockMode) {
+          // Auto detects external clock without MIDI Start.
+          // Clock detection alone does not start transport.
+          if (midiClockStatus == midiClockOff) {
+            midiClockStatus = midiClockOn;
+            // Continue from the current musical clock position.
+            // The first received pulse advances by one tick.
+            midiClockMessageCount = clock24PPQ + 1;
+            lastMidiClockTime = 0;
+            initialMidiClockMessageCount = 0;
+            fxd4MidiTempoAverage = fxd4CurrentTempo;
+            arpClockNeedsSync = false;
+            resetClockAdvancement(nowMicros);
+          }
+
+          // Update Auto's LED immediately when external clock returns.
+          // Follow the direct LED update used by the Global Settings button.
+          if (autoClockMode && !externalClockActive) {
+            externalClockActive = true;
+
+            if (displayMode == displayGlobal ||
+                displayMode == displayGlobalWithTempo) {
+              setLed(14, 5, COLOR_GREEN, cellOn);
+            }
+          }
+
           if (lastMidiClockTime > 0) {
             unsigned long clockDelta = calcTimeDelta(nowMicros, lastMidiClockTime);
 
             if (clockDelta != 0 && clockDelta > MIDI_CLOCK_MIN_DELTA) {
-              fxd4MidiTempoAverage -= FXD4_DIV(fxd4MidiTempoAverage, FXD4_MIDI_CLOCK_SAMPLES);
-              fxd4MidiTempoAverage += FXD4_DIV(FXD4_FROM_INT(MIDI_CLOCK_UNIT / clockDelta), FXD4_MIDI_CLOCK_SAMPLES);
+              int32_t measuredTempo =
+                  FXD4_FROM_INT(MIDI_CLOCK_UNIT / clockDelta);
+
+              if (initialMidiClockMessageCount == 0) {
+                fxd4MidiTempoAverage = measuredTempo;
+              }
+              else {
+                fxd4MidiTempoAverage -=
+                    FXD4_DIV(fxd4MidiTempoAverage, FXD4_MIDI_CLOCK_SAMPLES);
+                fxd4MidiTempoAverage +=
+                    FXD4_DIV(measuredTempo, FXD4_MIDI_CLOCK_SAMPLES);
+              }
               if (initialMidiClockMessageCount < MIDI_CLOCK_SAMPLES) {
                 initialMidiClockMessageCount += 1;
               }
-              else {
-                fxd4CurrentTempo = fxd4MidiTempoAverage;
-              }
+              // Preserve fxd4CurrentTempo for internal fallback.
+              // fxd4MidiTempoAverage tracks the external tempo.
             }
           }
 
@@ -187,8 +284,11 @@ void handleMidiInput(unsigned long nowMicros) {
           // and all the other ones
           if (midiClockStatus == midiClockStart) {
             midiClockStatus = midiClockOn;
-            boolean clockUpdated = checkUpdateClock(nowMicros);
-            sequencersTurnOn();
+            boolean clockUpdated =
+                autoClockMode && checkUpdateClock(nowMicros);
+            if (transportReceiveEnabled) {
+              sequencersTurnOn();
+            }
             if (clockUpdated) {
               performCheckAdvanceArpeggiator();
               performCheckAdvanceSequencer();
@@ -210,7 +310,7 @@ void handleMidiInput(unsigned long nowMicros) {
           }
 
           // play the next arpeggiator and sequencer steps if needed
-          if (checkUpdateClock(nowMicros)) {
+          if (autoClockMode && checkUpdateClock(nowMicros)) {
             performCheckAdvanceArpeggiator();
             performCheckAdvanceSequencer();
           }
@@ -1165,7 +1265,8 @@ void receivedNrpn(int parameter, int value, int channel) {
       break;
     // Global Clock BPM
     case 238:
-      if (inRange(value, 1, 360)) {
+      // Do not modify internal BPM while external clock is master.
+      if (!isSyncedToMidiClock() && inRange(value, 1, 360)) {
         fxd4CurrentTempo = FXD4_FROM_INT(value);
       }
       break;
@@ -1756,7 +1857,7 @@ void sendNrpnParameter(int parameter, int channel) {
 }
 
 inline boolean isSyncedToMidiClock() {
-  return midiClockStatus == midiClockOn;
+  return autoClockMode && externalClockActive;
 }
 
 inline short getMidiClockCount() {

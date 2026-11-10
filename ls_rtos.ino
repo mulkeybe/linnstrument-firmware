@@ -206,7 +206,24 @@ inline void checkTimeToReadFootSwitches(unsigned long now) {
 inline void checkRefreshGlobalSettingsDisplay(unsigned long now) {
   if ((displayMode == displayGlobal || displayMode == displayGlobalWithTempo) &&
       calcTimeDelta(now, prevGlobalSettingsDisplayTimerCount) > 30000) {                                      // is it time to refresh the global settings display
-    paintGlobalSettingsFlashTempo(now);                                                                       // yes, refresh the display...
+    paintGlobalSettingsFlashTempo(now);
+
+    // Refresh numeric BPM when the external tempo estimate changes.
+    static int previousDisplayedBpm = -1;
+    if (displayMode == displayGlobalWithTempo) {
+      int32_t measured = isSyncedToMidiClock()
+          ? getExternalMidiTempo() : fxd4CurrentTempo;
+      int bpm = FXD4_TO_INT(measured);
+
+      if (bpm != previousDisplayedBpm) {
+        previousDisplayedBpm = bpm;
+        updateDisplay();
+      }
+    }
+    else {
+      previousDisplayedBpm = -1;
+    }
+
     prevGlobalSettingsDisplayTimerCount = now;                                                                // and reset the timer count to current time
   }
 }

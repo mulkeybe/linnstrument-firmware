@@ -1,3 +1,5 @@
+void checkAutoClockTimeout(unsigned long now);
+
 /***************************** ls_clock: LinnStrument Musical Clock *******************************
 Copyright 2023 Roger Linn Design (https://www.rogerlinndesign.com)
 
@@ -48,6 +50,8 @@ void resetClockAdvancement(unsigned long now) {
 }
 
 inline boolean checkUpdateClock(unsigned long now) {
+  checkAutoClockTimeout(now);
+
   short clockCount;
 
   if (isSyncedToMidiClock()) {
@@ -114,6 +118,9 @@ inline boolean checkUpdateClock(unsigned long now) {
 }
 
 void tapTempoPress() {
+  // Tap Tempo belongs exclusively to internal clock timing.
+  if (isSyncedToMidiClock()) return;
+
   unsigned long now = micros();
   resetClockAdvancement(now);
 

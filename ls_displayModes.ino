@@ -1,3 +1,5 @@
+int32_t getExternalMidiTempo();
+
 /************************** ls_displayModes: LinnStrument display modes drawing *******************
 Copyright 2023 Roger Linn Design (https://www.rogerlinndesign.com)
 
@@ -1659,9 +1661,14 @@ inline void paintGlobalSettingsFlashTempo(unsigned long now, byte col, byte row)
       flash_on = (clock24PPQ == 0);
     }
 
-    // flash the tap tempo cell at the beginning of the beat
+    // Green for external MIDI Clock, normal color for internal.
     if (flash_on) {
-      lightLed(col, row);
+      if (isSyncedToMidiClock()) {
+        setLed(col, row, COLOR_GREEN, cellOn);
+      }
+      else {
+        lightLed(col, row);
+      }
       tempoLedOn = now;
     }
 
@@ -1867,6 +1874,17 @@ void paintGlobalSettingsDisplay() {
       lightLed(14, 1);
     }
 
+    // Show the clock source currently controlling timing.
+    // Green = external MIDI Clock; orange = internal fallback.
+    setLed(14, autoClockMode ? 5 : 4,
+           autoClockMode
+               ? (externalClockActive ? COLOR_GREEN : COLOR_WHITE)
+               : COLOR_BLUE, cellOn);
+
+    if (transportReceiveEnabled) {
+      setLed(14, 6, COLOR_MAGENTA, cellOn);
+    }
+
     paintGlobalSettingsFlashTempo(micros());
   }
 
@@ -1874,7 +1892,9 @@ void paintGlobalSettingsDisplay() {
     byte color = Split[LEFT].colorMain;
     char str[4];
     const char* format = "%3d";
-    snprintf(str, sizeof(str), format, FXD4_TO_INT(fxd4CurrentTempo));
+    int32_t displayedTempo = isSyncedToMidiClock()
+        ? getExternalMidiTempo() : fxd4CurrentTempo;
+    snprintf(str, sizeof(str), format, FXD4_TO_INT(displayedTempo));
     tinyfont_draw_string(0, 4, str, color);
   }
 

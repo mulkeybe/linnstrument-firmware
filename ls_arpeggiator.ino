@@ -129,6 +129,8 @@ void sendArpeggiatorStepMidiOff(byte split) {
 }
 
 inline void checkAdvanceArpeggiator() {
+  if (!transportArpRunning) return;
+
   checkAdvanceArpeggiatorForSplit(LEFT);
   checkAdvanceArpeggiatorForSplit(RIGHT);
 }

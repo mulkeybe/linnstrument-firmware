@@ -233,6 +233,12 @@ void writeSettingsToFlash() {
   writeAdaptivelyToFlash(SETTINGS_OFFSET+sizeof(unsigned long)+configOffset, (byte*)&config, sizeof(Configuration));
 
   // write the marker after the configuration data so that this version becomes to latest coherent one
+  // Persist Auto and Transport Receive in two reserved bytes.
+  byte clockFlags = (autoClockMode ? 1 : 0) |
+                    (transportReceiveEnabled ? 2 : 0);
+
+  dueFlashStorage.write(SETTINGS_OFFSET + 1, 0xA7);
+  dueFlashStorage.write(SETTINGS_OFFSET + 2, clockFlags);
   dueFlashStorage.write(SETTINGS_OFFSET, marker);
 
   clearFullDisplay();
@@ -250,6 +256,21 @@ void loadSettings() {
     configOffset = sizeof(Configuration);
   }
   memcpy(&config, dueFlashStorage.readAddress(SETTINGS_OFFSET+sizeof(unsigned long)+configOffset), sizeof(Configuration));
+
+  byte magic = dueFlashStorage.read(SETTINGS_OFFSET + 1);
+  byte flags = dueFlashStorage.read(SETTINGS_OFFSET + 2);
+
+  if (magic == 0xA7 && (flags & 0xFC) == 0) {
+    autoClockMode = (flags & 1) != 0;
+    transportReceiveEnabled = (flags & 2) != 0;
+  }
+  else {
+    autoClockMode = false;
+    transportReceiveEnabled = false;
+  }
+
+  externalClockActive = false;
+  transportArpRunning = true;
 }
 
 void writeInitialProjectSettings() {
@@ -2621,7 +2642,9 @@ void handleGlobalSettingNewTouch() {
   if (!userFirmwareActive) {
 
     // handle tempo change
-    if (!isCalibrationCellHeld() && sensorRow >= 4 && sensorRow != 7) {
+    if (!isCalibrationCellHeld() &&
+      sensorRow >= 4 && sensorRow != 7 &&
+      !(sensorCol == 14 && sensorRow >= 4 && sensorRow <= 6)) {
       handleTempoNewTouch();
     }
 
@@ -2898,6 +2921,29 @@ void handleGlobalSettingNewTouch() {
 
       case 14:
         switch (sensorRow) {
+          case 4:
+          case 5:
+          {
+            boolean nextAutoMode = (sensorRow == 5);
+            if (autoClockMode != nextAutoMode) {
+              autoClockMode = nextAutoMode;
+              externalClockActive = false;
+              midiClockStatus = midiClockOff;
+              midiClockMessageCount = 0;
+              lastMidiClockTime = 0;
+              initialMidiClockMessageCount = 0;
+              resetClockAdvancement(micros());
+              lastInternalClockCount = clock24PPQ;
+              arpClockNeedsSync = false;
+            }
+            break;
+          }
+          case 6:
+            transportReceiveEnabled = !transportReceiveEnabled;
+            if (!transportReceiveEnabled) {
+              transportArpRunning = true;
+            }
+            break;
           case 0:
             if (Global.arpOctave == 1) {
               Global.arpOctave = 0;
@@ -3295,7 +3341,8 @@ void handleGlobalSettingRelease() {
 
   if (!userFirmwareActive) {
 
-    if (sensorRow >= 4 && sensorRow != 7) {
+    if (sensorRow >= 4 && sensorRow != 7 &&
+        !(sensorCol == 14 && sensorRow >= 4 && sensorRow <= 6)) {
       handleNumericDataReleaseCol(false);
     }
     else if (sensorCol == 16) {

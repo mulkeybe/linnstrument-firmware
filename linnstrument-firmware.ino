@@ -1004,6 +1004,11 @@ unsigned long lastReset;                            // the last time a reset was
 
 short lastReadSensorRawZ = 0;                       // the last pressure value that was read straight off of the sensor without any sensor bias nor sensitivity calibration
 
+boolean autoClockMode = false;
+boolean externalClockActive = false;
+boolean transportReceiveEnabled = false;
+boolean transportArpRunning = true;
+
 byte globalColor = COLOR_BLUE;                      // color for global, split point and transpose settings
 byte globalAltColor = COLOR_CYAN;                   // alternate color for global, split point and transpose settings
 byte globalLowRowColor = COLOR_GREEN;               // color for low row painting in global settings
