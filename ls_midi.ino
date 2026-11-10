@@ -61,7 +61,7 @@ boolean standaloneMidiClockRunning = false;                // indicates whether 
 void checkAutoClockTimeout(unsigned long now) {
   // Use current time, not an earlier task-loop timestamp.
   now = micros();
-  // Squarp-style 2-second missing-clock timeout.
+  // Fall back to internal clock after 2 seconds without MIDI Clock.
   if (autoClockMode && externalClockActive &&
       lastMidiClockTime != 0 &&
       calcTimeDelta(now, lastMidiClockTime) > 2000000UL) {
@@ -229,8 +229,7 @@ void handleMidiInput(unsigned long nowMicros) {
         midiMessageIndex = 1;
 
         if (midiClockStatus != midiClockOff || autoClockMode) {
-          // Auto detects external clock without MIDI Start.
-          // Clock detection alone does not start transport.
+          // Auto detects external clock without starting transport.
           if (midiClockStatus == midiClockOff) {
             midiClockStatus = midiClockOn;
             // Continue from the current musical clock position.

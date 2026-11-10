@@ -1799,61 +1799,61 @@ void paintGlobalSettingsDisplay() {
     // Set the lights for the Arpeggiator settings
     switch (Global.arpDirection) {
       case ArpDown:
-        lightLed(12, 0);
+        setLed(12, 0, COLOR_GREEN, cellOn);
         break;
       case ArpUp:
-        lightLed(12, 1);
+        setLed(12, 1, COLOR_GREEN, cellOn);
         break;
       case ArpUpDown:
-        lightLed(12, 0);
-        lightLed(12, 1);
+        setLed(12, 0, COLOR_GREEN, cellOn);
+        setLed(12, 1, COLOR_GREEN, cellOn);
         break;
       case ArpRandom:
-        lightLed(12, 2);
+        setLed(12, 2, COLOR_GREEN, cellOn);
         break;
       case ArpReplayAll:
-        lightLed(12, 3);
+        setLed(12, 3, COLOR_GREEN, cellOn);
         break;
     }
 
     switch (Global.arpTempo) {
       case ArpSixteenthSwing:
       case ArpHalfSwing:
-        lightLed(13, 0);
-        lightLed(13, 1);
+        setLed(13, 0, COLOR_LIME, cellOn);
+        setLed(13, 1, COLOR_LIME, cellOn);
         break;
 
       case ArpEighth:
       case ArpWhole:
-        lightLed(13, 0);
+        setLed(13, 0, COLOR_LIME, cellOn);
         break;
 
       case ArpEighthTriplet:
       case ArpWholeTriplet:
-        lightLed(13, 0);
-        lightLed(13, 3);
+        setLed(13, 0, COLOR_LIME, cellOn);
+        setLed(13, 3, COLOR_LIME, cellOn);
         break;
 
       case ArpSixteenth:
       case ArpHalf:
-        lightLed(13, 1);
+        setLed(13, 1, COLOR_LIME, cellOn);
         break;
 
       case ArpSixteenthTriplet:
       case ArpHalfTriplet:
-        lightLed(13, 1);
-        lightLed(13, 3);
+        setLed(13, 1, COLOR_LIME, cellOn);
+        setLed(13, 3, COLOR_LIME, cellOn);
         break;
 
       case ArpThirtysecond:
       case ArpFourth:
-        lightLed(13, 2);
+        setLed(13, 2, COLOR_LIME, cellOn);
         break;
 
       case ArpThirtysecondTriplet:
       case ArpFourthTriplet:
-        lightLed(13, 2);
-        lightLed(13, 3);
+        setLed(13, 2, COLOR_LIME, cellOn);
+        setLed(13, 3, COLOR_LIME, cellOn);
         break;
 
       case ArpSixtyfourthTriplet:
@@ -1861,28 +1861,28 @@ void paintGlobalSettingsDisplay() {
         break;
     }
 
-    // Illuminate the Slow Mode toggle when a slow rate is selected.
+    // Slow Mode indicator.
     if (isArpeggiatorSlowMode()) {
-      lightLed(14, 2);
+      setLed(14, 2, COLOR_YELLOW, cellOn);
     }
 
     // show the arpeggiator octave
     if (Global.arpOctave == 1) {
-      lightLed(14, 0);
+      setLed(14, 0, COLOR_MAGENTA, cellOn);
     }
     else if (Global.arpOctave == 2) {
-      lightLed(14, 1);
+      setLed(14, 1, COLOR_MAGENTA, cellOn);
     }
 
     // Show the clock source currently controlling timing.
-    // Green = external MIDI Clock; orange = internal fallback.
+    // Green = external MIDI Clock; white = internal fallback in Auto mode.
     setLed(14, autoClockMode ? 5 : 4,
            autoClockMode
                ? (externalClockActive ? COLOR_GREEN : COLOR_WHITE)
                : COLOR_BLUE, cellOn);
 
     if (transportReceiveEnabled) {
-      setLed(14, 6, COLOR_MAGENTA, cellOn);
+      setLed(14, 6, COLOR_ORANGE, cellOn);
     }
 
     paintGlobalSettingsFlashTempo(micros());
