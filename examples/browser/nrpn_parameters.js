@@ -3851,39 +3851,87 @@ limitations under the License.
         "group": "Global",
         "name": "Arp Tempo Note Value",
         "kind": "enum",
-        "min": 1,
-        "max": 7,
+        "min": 0,
+        "max": 18,
         "options": [
           {
+            "value": 0,
+            "label": "1/1"
+          },
+          {
             "value": 1,
-            "label": "8"
+            "label": "1/1T"
           },
           {
             "value": 2,
-            "label": "8 Tri"
+            "label": "1/2"
           },
           {
             "value": 3,
-            "label": "16"
+            "label": "1/2T"
           },
           {
             "value": 4,
-            "label": "16 Swing"
+            "label": "1/4"
           },
           {
             "value": 5,
-            "label": "16 Tri"
+            "label": "1/4T"
           },
           {
             "value": 6,
-            "label": "32"
+            "label": "1/8"
           },
           {
             "value": 7,
-            "label": "32 Tri"
+            "label": "1/8T"
+          },
+          {
+            "value": 8,
+            "label": "1/16"
+          },
+          {
+            "value": 9,
+            "label": "1/16T"
+          },
+          {
+            "value": 10,
+            "label": "1/32"
+          },
+          {
+            "value": 11,
+            "label": "1/32T"
+          },
+          {
+            "value": 12,
+            "label": "1/64T legacy"
+          },
+          {
+            "value": 13,
+            "label": "1/1S"
+          },
+          {
+            "value": 14,
+            "label": "1/2S"
+          },
+          {
+            "value": 15,
+            "label": "1/4S"
+          },
+          {
+            "value": 16,
+            "label": "1/8S"
+          },
+          {
+            "value": 17,
+            "label": "1/16S"
+          },
+          {
+            "value": 18,
+            "label": "1/32S"
           }
         ],
-        "description": "Global Arp Tempo Note Value (1: 8, 2: 8 Tri, 3: 16, 4: 16 Swing, 5: 16 Tri, 6: 32, 7: 32 Tri)"
+        "description": "Global Arp Tempo Note Value (0: 1/1, 1: 1/1T, 2: 1/2, 3: 1/2T, 4: 1/4, 5: 1/4T, 6: 1/8, 7: 1/8T, 8: 1/16, 9: 1/16T, 10: 1/32, 11: 1/32T, 12: 1/64T legacy, 13: 1/1S, 14: 1/2S, 15: 1/4S, 16: 1/8S, 17: 1/16S, 18: 1/32S)"
       },
       {
         "number": 237,

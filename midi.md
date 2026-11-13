@@ -248,7 +248,7 @@ words, and the named values are written as `n: label` pairs in parentheses.
 | 233  | 0-2   | Global Pressure Sensitivity (0: Low, 1: Medium, 2: High)
 | 234  | 0-1   | Device MIDI I/O (0: MIDI Jacks, 1: USB)
 | 235  | 0-4   | Global Arp Direction (0: Up, 1: Down, 2: Up Down, 3: Random, 4: Replay All)
-| 236  | 1-7   | Global Arp Tempo Note Value (1: 8, 2: 8 Tri, 3: 16, 4: 16 Swing, 5: 16 Tri, 6: 32, 7: 32 Tri)
+| 236  | 0-18  | Global Arp Tempo Note Value (0: 1/1, 1: 1/1T, 2: 1/2, 3: 1/2T, 4: 1/4, 5: 1/4T, 6: 1/8, 7: 1/8T, 8: 1/16, 9: 1/16T, 10: 1/32, 11: 1/32T, 12: 1/64T legacy, 13: 1/1S, 14: 1/2S, 15: 1/4S, 16: 1/8S, 17: 1/16S, 18: 1/32S)
 | 237  | 0-2   | Global Arp Octave Extension (0: None, 1: +1, 2: +2)
 | 238  | 1-360 | Global Clock BPM (applies when receiving no MIDI clock)
 | 239  | 0-1   | Global Switch 1 Both Splits (0: Off, 1: On)

@@ -170,41 +170,138 @@ TEST(arpeggiator_half_swing_preserves_long_short_pattern) {
   }
 }
 
-TEST(arpeggiator_slow_mode_button_preserves_rate_variants) {
-  struct RatePair {
-    ArpeggiatorStepTempo normal;
-    ArpeggiatorStepTempo slow;
+TEST(arpeggiator_rate_cells_and_modifiers) {
+  const ArpeggiatorStepTempo straight[] = {
+    ArpWhole, ArpHalf, ArpFourth, ArpEighth, ArpSixteenth, ArpThirtysecond
   };
-
-  const RatePair pairs[] = {
-    {ArpEighth, ArpWhole},
-    {ArpEighthTriplet, ArpWholeTriplet},
-    {ArpSixteenth, ArpHalf},
-    {ArpSixteenthTriplet, ArpHalfTriplet},
-    {ArpSixteenthSwing, ArpHalfSwing},
-    {ArpThirtysecond, ArpFourth},
-    {ArpThirtysecondTriplet, ArpFourthTriplet}
+  const ArpeggiatorStepTempo triplet[] = {
+    ArpWholeTriplet, ArpHalfTriplet, ArpFourthTriplet,
+    ArpEighthTriplet, ArpSixteenthTriplet, ArpThirtysecondTriplet
   };
-
-  for (const auto& pair : pairs) {
+  const ArpeggiatorStepTempo swing[] = {
+    ArpWholeSwing, ArpHalfSwing, ArpFourthSwing,
+    ArpEighthSwing, ArpSixteenthSwing, ArpThirtysecondSwing
+  };
+  for (int row = 0; row < 6; ++row) {
     linn::reset();
+    Global.arpTempo = ArpFourth;
+    linn::select(13, row);
+    handleGlobalSettingNewTouch();
+    CHECK_EQ((int)Global.arpTempo, (int)straight[row]);
+    linn::select(13, 6);
+    handleGlobalSettingNewTouch();
+    CHECK_EQ((int)Global.arpTempo, (int)triplet[row]);
+    linn::select(13, row);
+    handleGlobalSettingNewTouch();
+    CHECK_EQ((int)Global.arpTempo, (int)triplet[row]);
+    linn::select(13, 7);
+    handleGlobalSettingNewTouch();
+    CHECK_EQ((int)Global.arpTempo, (int)swing[row]);
+    handleGlobalSettingNewTouch();
+    CHECK_EQ((int)Global.arpTempo, (int)straight[row]);
     linn::select(14, 2);
-
-    Global.arpTempo = pair.normal;
-    CHECK(!isArpeggiatorSlowMode());
-
     handleGlobalSettingNewTouch();
-    CHECK_EQ((int)Global.arpTempo, (int)pair.slow);
-    CHECK(isArpeggiatorSlowMode());
+    CHECK_EQ((int)Global.arpTempo, (int)straight[row]);
+  }
+}
 
-    handleGlobalSettingNewTouch();
-    CHECK_EQ((int)Global.arpTempo, (int)pair.normal);
-    CHECK(!isArpeggiatorSlowMode());
+// Columns 13 and 14 now own the upper rows; the old Global Settings
+// tempo swipe and audience-message editor must not intercept these pads.
+TEST(arpeggiator_upper_row_controls_do_not_trigger_tempo_or_message_edit) {
+  for (byte col = 13; col <= 14; ++col) {
+    // Press and release the upper numeric rows without opening BPM display or
+    // modifying its touch/release counter.
+    for (byte row = 4; row <= 6; ++row) {
+      linn::reset();
+      setDisplayMode(displayGlobal);
+      linn::select(col, row);
+      unsigned long originalTempoChange = tempoChangeTime;
+      int originalCounter = numericActiveColDown;
+      handleGlobalSettingNewTouch();
+      CHECK_EQ((int)displayMode, (int)displayGlobal);
+      CHECK_EQ(tempoChangeTime, originalTempoChange);
+      CHECK_EQ((int)numericActiveColDown, originalCounter);
+      handleGlobalSettingRelease();
+      CHECK_EQ((int)numericActiveColDown, originalCounter);
+    }
+
+    // A long hold on row 7 must not open the audience-message editor.
+    linn::reset();
+    setDisplayMode(displayGlobal);
+    linn::select(col, 7);
+    sensorCell->lastTouch = millis();
+    host::advanceMicros(6000000);
+    handleGlobalSettingHold();
+    CHECK_EQ((int)displayMode, (int)displayGlobal);
+  }
+}
+
+TEST(arpeggiator_swing_rates_have_long_short_steps) {
+  struct SwingRate { ArpeggiatorStepTempo rate; int period; int offset; };
+  const SwingRate rates[] = {
+    {ArpWholeSwing, 192, 112}, {ArpHalfSwing, 96, 56},
+    {ArpFourthSwing, 48, 28}, {ArpEighthSwing, 24, 14},
+    {ArpSixteenthSwing, 12, 7}, {ArpThirtysecondSwing, 6, 4}
+  };
+  for (const auto& rate : rates) {
+    holdTwoNotes();
+    Global.arpDirection = ArpUp;
+    Global.arpTempo = rate.rate;
+    arpTempoDelta[LEFT] = 0;
+    for (int tick = 0; tick < 192; ++tick) {
+      arpClockPhase = tick;
+      checkAdvanceArpeggiatorForSplit(LEFT);
+      int ons = 0;
+      for (const auto& note : arpNotes()) {
+        if ((note[0] & 0xF0) == 0x90) ++ons;
+      }
+      CHECK_EQ(ons, (tick % rate.period == 0 ||
+                     tick % rate.period == rate.offset) ? 1 : 0);
+    }
+  }
+}
+
+TEST(arpeggiator_low_row_rate_ladders_preserve_swing) {
+  struct Case {
+    ArpeggiatorStepTempo rate;
+    int delta;
+    int period;
+    int offset;  // zero for straight/triplet, otherwise swing offset
+  };
+  const Case cases[] = {
+    {ArpEighthSwing,  1, 12, 7},   // 1/8S -> 1/16S
+    {ArpEighthSwing, -1, 48, 28}, // 1/8S -> 1/4S
+    {ArpWholeSwing,  -1, 192, 112}, // clamp slow Swing end
+    {ArpThirtysecondSwing, 1, 6, 4}, // clamp fast Swing end
+    {ArpEighth, 1, 8, 0},        // 1/8 -> 1/8T
+    {ArpEighthTriplet, 1, 6, 0}, // 1/8T -> 1/16
+    {ArpThirtysecondTriplet, 1, 1, 0}, // legacy 1/64T
+    {ArpSixtyfourthTriplet, 1, 1, 0}   // clamp 1/64T
+  };
+
+  for (const auto& c : cases) {
+    holdTwoNotes();
+    Global.arpDirection = ArpUp;
+    Global.arpTempo = c.rate;
+    arpTempoDelta[LEFT] = c.delta;
+    for (int tick = 0; tick < 192; ++tick) {
+      arpClockPhase = tick;
+      checkAdvanceArpeggiatorForSplit(LEFT);
+      int noteOns = 0;
+      for (const auto& note : arpNotes()) {
+        if ((note[0] & 0xF0) == 0x90) ++noteOns;
+      }
+      bool expected = c.offset
+        ? (tick % c.period == 0 || tick % c.period == c.offset)
+        : (tick % c.period == 0);
+      CHECK_EQ(noteOns, expected ? 1 : 0);
+    }
   }
 }
 
 TEST(arpeggiator_midi_clock_start_and_192_tick_wrap) {
   linn::reset();
+  autoClockMode = true;
 
   linn::midiIn({0xFA});  // MIDI Start
   CHECK(arpClockNeedsSync);
@@ -220,9 +317,10 @@ TEST(arpeggiator_midi_clock_start_and_192_tick_wrap) {
     CHECK_EQ((int)arpClockPhase, tick % 192);
   }
 
-  linn::midiIn({0xFC});  // MIDI Stop
-  CHECK_EQ((int)arpClockPhase, 0);
-  CHECK(arpClockNeedsSync);
+  unsigned short phaseBeforeStop = arpClockPhase;
+  linn::midiIn({0xFC});  // Auto mode preserves clock phase.
+  CHECK_EQ((int)arpClockPhase, (int)phaseBeforeStop);
+  CHECK(!arpClockNeedsSync);
 }
 
 TEST(arpeggiator_midi_song_position_and_continue) {
@@ -230,6 +328,7 @@ TEST(arpeggiator_midi_song_position_and_continue) {
 
   for (int pos : positions) {
     linn::reset();
+    autoClockMode = true;
 
     // SPP counts six MIDI clock pulses per unit.
     linn::midiIn({0xF2, (uint8_t)(pos & 0x7F),
@@ -252,6 +351,7 @@ TEST(arpeggiator_midi_song_position_and_continue) {
   // Continue without a preceding SPP follows the firmware's
   // existing behavior of restarting at position zero.
   linn::reset();
+  autoClockMode = true;
   linn::midiIn({0xFB});
   linn::midiIn({0xF8});
   CHECK_EQ((int)arpClockPhase, 0);
@@ -286,6 +386,7 @@ TEST(arpeggiator_internal_clock_extends_to_192_ticks) {
 
 TEST(arpeggiator_midi_clock_long_term_alignment) {
   linn::reset();
+  autoClockMode = true;
   linn::midiIn({0xFA}); // Start
 
   // 4096 clock messages: more than 42 measures of 4/4.
@@ -301,6 +402,7 @@ TEST(arpeggiator_midi_clock_long_term_alignment) {
 
 TEST(arpeggiator_skipped_clock_positions) {
   linn::reset();
+  autoClockMode = true;
   linn::midiIn({0xFA});
   linn::midiIn({0xF8});
 

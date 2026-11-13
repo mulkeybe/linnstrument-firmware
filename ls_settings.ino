@@ -2430,22 +2430,41 @@ boolean isArpeggiatorTempoTriplet() {
          Global.arpTempo == ArpFourthTriplet ||
          Global.arpTempo == ArpEighthTriplet ||
          Global.arpTempo == ArpSixteenthTriplet ||
-         Global.arpTempo == ArpThirtysecondTriplet;
+         Global.arpTempo == ArpThirtysecondTriplet ||
+         Global.arpTempo == ArpSixtyfourthTriplet;
 }
 
-boolean isArpeggiatorSlowMode() {
+// Global Settings column 13: six divisions (rows 0-5) and modifiers (6-7).
+byte arpeggiatorRateRow() {
   switch (Global.arpTempo) {
-    case ArpWhole:
-    case ArpWholeTriplet:
-    case ArpHalf:
-    case ArpHalfTriplet:
-    case ArpHalfSwing:
-    case ArpFourth:
-    case ArpFourthTriplet:
-      return true;
-    default:
-      return false;
+    case ArpWhole: case ArpWholeTriplet: case ArpWholeSwing: return 0;
+    case ArpHalf: case ArpHalfTriplet: case ArpHalfSwing: return 1;
+    case ArpFourth: case ArpFourthTriplet: case ArpFourthSwing: return 2;
+    case ArpEighth: case ArpEighthTriplet: case ArpEighthSwing: return 3;
+    case ArpSixteenth: case ArpSixteenthTriplet: case ArpSixteenthSwing: return 4;
+    default: return 5;
   }
+}
+
+boolean isArpeggiatorTempoSwing() {
+  switch (Global.arpTempo) {
+    case ArpWholeSwing: case ArpHalfSwing: case ArpFourthSwing:
+    case ArpEighthSwing: case ArpSixteenthSwing: case ArpThirtysecondSwing:
+      return true;
+    default: return false;
+  }
+}
+
+ArpeggiatorStepTempo arpeggiatorTempoForRow(byte row, boolean triplet, boolean swing) {
+  static const ArpeggiatorStepTempo rates[6][3] = {
+    {ArpWhole, ArpWholeTriplet, ArpWholeSwing},
+    {ArpHalf, ArpHalfTriplet, ArpHalfSwing},
+    {ArpFourth, ArpFourthTriplet, ArpFourthSwing},
+    {ArpEighth, ArpEighthTriplet, ArpEighthSwing},
+    {ArpSixteenth, ArpSixteenthTriplet, ArpSixteenthSwing},
+    {ArpThirtysecond, ArpThirtysecondTriplet, ArpThirtysecondSwing}
+  };
+  return rates[constrain(row, 0, 5)][swing ? 2 : (triplet ? 1 : 0)];
 }
 
 void handleTempoNewTouch() {
@@ -2643,8 +2662,8 @@ void handleGlobalSettingNewTouch() {
 
     // handle tempo change
     if (!isCalibrationCellHeld() &&
-      sensorRow >= 4 && sensorRow != 7 &&
-      !(sensorCol == 14 && sensorRow >= 4 && sensorRow <= 6)) {
+        sensorCol >= 1 && sensorCol <= 12 &&
+        sensorRow >= 4 && sensorRow <= 6) {
       handleTempoNewTouch();
     }
 
@@ -2841,80 +2860,19 @@ void handleGlobalSettingNewTouch() {
 
       case 13:
       {
-        boolean slow = isArpeggiatorSlowMode();
+        byte rateRow = arpeggiatorRateRow();
         boolean triplet = isArpeggiatorTempoTriplet();
-
-        switch (sensorRow) {
-          case 0:
-            if (cell(sensorCol, 1).touched != untouchedCell) {
-              Global.arpTempo = slow ? ArpHalfSwing : ArpSixteenthSwing;
-            }
-            else {
-              Global.arpTempo = slow
-                  ? (triplet ? ArpWholeTriplet : ArpWhole)
-                  : (triplet ? ArpEighthTriplet : ArpEighth);
-            }
-            break;
-
-          case 1:
-            if (cell(sensorCol, 0).touched != untouchedCell) {
-              Global.arpTempo = slow ? ArpHalfSwing : ArpSixteenthSwing;
-            }
-            else {
-              Global.arpTempo = slow
-                  ? (triplet ? ArpHalfTriplet : ArpHalf)
-                  : (triplet ? ArpSixteenthTriplet : ArpSixteenth);
-            }
-            break;
-
-          case 2:
-            Global.arpTempo = slow
-                ? (triplet ? ArpFourthTriplet : ArpFourth)
-                : (triplet ? ArpThirtysecondTriplet : ArpThirtysecond);
-            break;
-
-          case 3:
-            switch (Global.arpTempo) {
-              case ArpWhole:
-                Global.arpTempo = ArpWholeTriplet;
-                break;
-              case ArpWholeTriplet:
-                Global.arpTempo = ArpWhole;
-                break;
-              case ArpHalf:
-                Global.arpTempo = ArpHalfTriplet;
-                break;
-              case ArpHalfTriplet:
-                Global.arpTempo = ArpHalf;
-                break;
-              case ArpFourth:
-                Global.arpTempo = ArpFourthTriplet;
-                break;
-              case ArpFourthTriplet:
-                Global.arpTempo = ArpFourth;
-                break;
-              case ArpEighth:
-                Global.arpTempo = ArpEighthTriplet;
-                break;
-              case ArpEighthTriplet:
-                Global.arpTempo = ArpEighth;
-                break;
-              case ArpSixteenth:
-                Global.arpTempo = ArpSixteenthTriplet;
-                break;
-              case ArpSixteenthTriplet:
-                Global.arpTempo = ArpSixteenth;
-                break;
-              case ArpThirtysecond:
-                Global.arpTempo = ArpThirtysecondTriplet;
-                break;
-              case ArpThirtysecondTriplet:
-                Global.arpTempo = ArpThirtysecond;
-                break;
-              default:
-                break;
-            }
-            break;
+        boolean swing = isArpeggiatorTempoSwing();
+        if (sensorRow <= 5) {
+          // Select a rate, keeping the chosen timing modifier.
+          Global.arpTempo = arpeggiatorTempoForRow(sensorRow, triplet, swing);
+        }
+        else if (sensorRow == 6) {
+          // Triplet and swing are mutually exclusive, and toggle off on repeat.
+          Global.arpTempo = arpeggiatorTempoForRow(rateRow, !triplet, false);
+        }
+        else if (sensorRow == 7) {
+          Global.arpTempo = arpeggiatorTempoForRow(rateRow, false, !swing);
         }
         break;
       }
@@ -2960,28 +2918,6 @@ void handleGlobalSettingNewTouch() {
               Global.arpOctave = 2;
             }
             break;
-              case 2:
-            switch (Global.arpTempo) {
-              case ArpEighth: Global.arpTempo = ArpWhole; break;
-              case ArpEighthTriplet: Global.arpTempo = ArpWholeTriplet; break;
-              case ArpSixteenth: Global.arpTempo = ArpHalf; break;
-              case ArpSixteenthTriplet: Global.arpTempo = ArpHalfTriplet; break;
-              case ArpSixteenthSwing: Global.arpTempo = ArpHalfSwing; break;
-              case ArpThirtysecond: Global.arpTempo = ArpFourth; break;
-              case ArpThirtysecondTriplet: Global.arpTempo = ArpFourthTriplet; break;
-
-              case ArpWhole: Global.arpTempo = ArpEighth; break;
-              case ArpWholeTriplet: Global.arpTempo = ArpEighthTriplet; break;
-              case ArpHalf: Global.arpTempo = ArpSixteenth; break;
-              case ArpHalfTriplet: Global.arpTempo = ArpSixteenthTriplet; break;
-              case ArpHalfSwing: Global.arpTempo = ArpSixteenthSwing; break;
-              case ArpFourth: Global.arpTempo = ArpThirtysecond; break;
-              case ArpFourthTriplet: Global.arpTempo = ArpThirtysecondTriplet; break;
-
-              default: break;
-            }
-            break;
-
       case 3:
             if (!isSyncedToMidiClock()) {
               lightLed(14, 3);
@@ -3223,7 +3159,7 @@ void handleGlobalSettingHold() {
         break;
     }
 
-    if (sensorRow == 7 && sensorCol <= 16) {
+    if (sensorRow == 7 && sensorCol >= 1 && sensorCol <= 12) {
       // initialize the touch-slide interface
       resetNumericDataChange();
 
@@ -3278,7 +3214,8 @@ void handleGlobalSettingRelease() {
   else if (sensorRow == 7) {
     // only show the messages if the tempo was changed more than 1s ago to prevent accidental touches
     if (calcTimeDelta(micros(), tempoChangeTime) >= 1000000) {
-      if (sensorCol <= 16 && ensureCellBeforeHoldWait(COLOR_BLACK, cellOff)) {
+      if (sensorCol >= 1 && sensorCol <= 12 &&
+          ensureCellBeforeHoldWait(COLOR_BLACK, cellOff)) {
         clearDisplay();
         big_scroll_text_flipped(Device.audienceMessages[sensorCol - 1], Split[LEFT].colorMain);        
       }
@@ -3341,8 +3278,8 @@ void handleGlobalSettingRelease() {
 
   if (!userFirmwareActive) {
 
-    if (sensorRow >= 4 && sensorRow != 7 &&
-        !(sensorCol == 14 && sensorRow >= 4 && sensorRow <= 6)) {
+    if (sensorCol >= 1 && sensorCol <= 12 &&
+        sensorRow >= 4 && sensorRow <= 6) {
       handleNumericDataReleaseCol(false);
     }
     else if (sensorCol == 16) {

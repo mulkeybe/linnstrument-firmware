@@ -1816,54 +1816,13 @@ void paintGlobalSettingsDisplay() {
         break;
     }
 
-    switch (Global.arpTempo) {
-      case ArpSixteenthSwing:
-      case ArpHalfSwing:
-        setLed(13, 0, COLOR_LIME, cellOn);
-        setLed(13, 1, COLOR_LIME, cellOn);
-        break;
-
-      case ArpEighth:
-      case ArpWhole:
-        setLed(13, 0, COLOR_LIME, cellOn);
-        break;
-
-      case ArpEighthTriplet:
-      case ArpWholeTriplet:
-        setLed(13, 0, COLOR_LIME, cellOn);
-        setLed(13, 3, COLOR_LIME, cellOn);
-        break;
-
-      case ArpSixteenth:
-      case ArpHalf:
-        setLed(13, 1, COLOR_LIME, cellOn);
-        break;
-
-      case ArpSixteenthTriplet:
-      case ArpHalfTriplet:
-        setLed(13, 1, COLOR_LIME, cellOn);
-        setLed(13, 3, COLOR_LIME, cellOn);
-        break;
-
-      case ArpThirtysecond:
-      case ArpFourth:
-        setLed(13, 2, COLOR_LIME, cellOn);
-        break;
-
-      case ArpThirtysecondTriplet:
-      case ArpFourthTriplet:
-        setLed(13, 2, COLOR_LIME, cellOn);
-        setLed(13, 3, COLOR_LIME, cellOn);
-        break;
-
-      case ArpSixtyfourthTriplet:
-        // Not directly available through panel controls.
-        break;
+    // Dedicated division and modifier LEDs in column 13.
+    setLed(13, arpeggiatorRateRow(), COLOR_LIME, cellOn);
+    if (isArpeggiatorTempoTriplet()) {
+      setLed(13, 6, COLOR_YELLOW, cellOn);
     }
-
-    // Slow Mode indicator.
-    if (isArpeggiatorSlowMode()) {
-      setLed(14, 2, COLOR_YELLOW, cellOn);
+    else if (isArpeggiatorTempoSwing()) {
+      setLed(13, 7, COLOR_YELLOW, cellOn);
     }
 
     // show the arpeggiator octave

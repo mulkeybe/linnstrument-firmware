@@ -748,6 +748,10 @@ enum ArpeggiatorStepTempo {
   ArpHalfTriplet = 12,
   ArpFourthTriplet = 13,
   ArpHalfSwing = 14,
+  ArpWholeSwing = 15,
+  ArpFourthSwing = 16,
+  ArpEighthSwing = 17,
+  ArpThirtysecondSwing = 18,
 };
 
 enum ArpeggiatorDirection {

@@ -1250,9 +1250,9 @@ void receivedNrpn(int parameter, int value, int channel) {
       }
       break;
     // Global Arp Tempo Note Value
-    // MIDI values are ordered from slowest to fastest.
+    // Straight/triplet rates are ordered by speed, followed by swung divisions.
     case 236:
-      if (inRange(value, 0, 14)) {
+      if (inRange(value, 0, 18)) {
         Global.arpTempo = (ArpeggiatorStepTempo)arpTempoOrder[value];
       }
       break;
@@ -1721,7 +1721,7 @@ void sendNrpnParameter(int parameter, int channel) {
       break;
     case 236:
       // Convert the internal rate to the ordered MIDI value.
-      for (byte i = 0; i < 15; ++i) {
+      for (byte i = 0; i < 19; ++i) {
         if (arpTempoOrder[i] == Global.arpTempo) {
           value = i;
           break;

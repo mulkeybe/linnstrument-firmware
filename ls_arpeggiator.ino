@@ -138,8 +138,12 @@ inline void checkAdvanceArpeggiator() {
 // Clock pulses per arpeggiator step, indexed by ArpeggiatorStepTempo.
 // Special values identify swing rates.
 #define TEMPO_ARP_HALF_SWING 0xfe
+#define TEMPO_ARP_WHOLE_SWING 0xfd
+#define TEMPO_ARP_FOURTH_SWING 0xfc
+#define TEMPO_ARP_EIGHTH_SWING 0xfb
+#define TEMPO_ARP_THIRTYSECOND_SWING 0xfa
 
-const byte arpTempoChoices[15] = {
+const byte arpTempoChoices[19] = {
   24, // ArpFourth
   12, // ArpEighth
    8, // ArpEighthTriplet
@@ -154,26 +158,26 @@ const byte arpTempoChoices[15] = {
   48, // ArpHalf
   32, // ArpHalfTriplet
   16, // ArpFourthTriplet
-  TEMPO_ARP_HALF_SWING // ArpHalfSwing
+  TEMPO_ARP_HALF_SWING, // ArpHalfSwing
+  TEMPO_ARP_WHOLE_SWING, // ArpWholeSwing
+  TEMPO_ARP_FOURTH_SWING, // ArpFourthSwing
+  TEMPO_ARP_EIGHTH_SWING, // ArpEighthSwing
+  TEMPO_ARP_THIRTYSECOND_SWING // ArpThirtysecondSwing
 };
 
 // Ordered slowest to fastest for Low Row speed adjustment.
-const byte arpTempoOrder[15] = {
-  ArpWhole,
-  ArpWholeTriplet,
-  ArpHalf,
-  ArpHalfSwing,
-  ArpHalfTriplet,
-  ArpFourth,
-  ArpFourthTriplet,
-  ArpEighth,
-  ArpEighthTriplet,
-  ArpSixteenth,
-  ArpSixteenthSwing,
-  ArpSixteenthTriplet,
-  ArpThirtysecond,
-  ArpThirtysecondTriplet,
-  ArpSixtyfourthTriplet
+// NRPN 236: actual subdivisions slowest-to-fastest, then swing divisions.
+// Low Row uses each section as its own speed ladder.
+const byte arpTempoOrder[19] = {
+  ArpWhole, ArpWholeTriplet,
+  ArpHalf, ArpHalfTriplet,
+  ArpFourth, ArpFourthTriplet,
+  ArpEighth, ArpEighthTriplet,
+  ArpSixteenth, ArpSixteenthTriplet,
+  ArpThirtysecond, ArpThirtysecondTriplet,
+  ArpSixtyfourthTriplet,
+  ArpWholeSwing, ArpHalfSwing, ArpFourthSwing,
+  ArpEighthSwing, ArpSixteenthSwing, ArpThirtysecondSwing
 };
 
 inline void checkAdvanceArpeggiatorForSplit(byte split) {
@@ -182,32 +186,40 @@ inline void checkAdvanceArpeggiatorForSplit(byte split) {
     return;
   }
 
-  // Find the selected rate in the slowest-to-fastest ordering.
-  int tempoIndex = 0;
-  for (int i = 0; i < 15; ++i) {
+  // Swing changes spacing, not average speed: keep it in its own lane.
+  // The regular lane includes straight/triplet plus legacy 1/64 triplet.
+  const bool swing = isArpeggiatorTempoSwing();
+  const int first = swing ? 13 : 0;
+  const int last = swing ? 18 : 12;
+  int rateIndex = first;
+  for (int i = first; i <= last; ++i) {
     if (arpTempoOrder[i] == Global.arpTempo) {
-      tempoIndex = i;
+      rateIndex = i;
       break;
     }
   }
 
-  // Apply the Low Row speed adjustment.
-  int combinedIndex = constrain(
-      tempoIndex + arpTempoDelta[split], 0, 14);
-
-  byte tempo = arpTempoChoices[arpTempoOrder[combinedIndex]];
+  // A one-column Low Row slide selects the next musical speed, while
+  // preserving swing if the starting rate was swung.
+  const int combinedIndex = constrain(rateIndex + arpTempoDelta[split], first, last);
+  const byte tempo = arpTempoChoices[arpTempoOrder[combinedIndex]];
 
   boolean advance = false;
 
-  if (tempo == TEMPO_ARP_SIXTEENTH_SWING) {
-    // Preserve the original 7/5-pulse swing.
-    advance = (arpClockPhase % 12 == 0 ||
-               arpClockPhase % 12 == 7);
+  // Preserve the 7:5 swing ratio, except 1/32 swing rounds to 4:2 at 24 PPQ.
+  unsigned int swingPeriod = 0;
+  unsigned int swingOffset = 0;
+  switch (tempo) {
+    case TEMPO_ARP_WHOLE_SWING: swingPeriod = 192; swingOffset = 112; break;
+    case TEMPO_ARP_HALF_SWING: swingPeriod = 96; swingOffset = 56; break;
+    case TEMPO_ARP_FOURTH_SWING: swingPeriod = 48; swingOffset = 28; break;
+    case TEMPO_ARP_EIGHTH_SWING: swingPeriod = 24; swingOffset = 14; break;
+    case TEMPO_ARP_SIXTEENTH_SWING: swingPeriod = 12; swingOffset = 7; break;
+    case TEMPO_ARP_THIRTYSECOND_SWING: swingPeriod = 6; swingOffset = 4; break;
   }
-  else if (tempo == TEMPO_ARP_HALF_SWING) {
-    // Same swing proportion at half-note speed.
-    advance = (arpClockPhase % 96 == 0 ||
-               arpClockPhase % 96 == 56);
+  if (swingPeriod) {
+    unsigned int phase = arpClockPhase % swingPeriod;
+    advance = phase == 0 || phase == swingOffset;
   }
   else {
     advance = (arpClockPhase % tempo == 0);

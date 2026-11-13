@@ -124,11 +124,23 @@ TEST(nrpn_query_answers_with_the_value_and_a_null_rpn) {
 TEST(nrpn_236_selects_and_reports_all_arpeggiator_rates) {
   linn::reset();
 
-  for (int value = 0; value < 15; ++value) {
+  // Independent expected mapping: do not derive this from arpTempoOrder.
+  const ArpeggiatorStepTempo expectedRates[19] = {
+    ArpWhole, ArpWholeTriplet,
+    ArpHalf, ArpHalfTriplet,
+    ArpFourth, ArpFourthTriplet,
+    ArpEighth, ArpEighthTriplet,
+    ArpSixteenth, ArpSixteenthTriplet,
+    ArpThirtysecond, ArpThirtysecondTriplet,
+    ArpSixtyfourthTriplet,
+    ArpWholeSwing, ArpHalfSwing, ArpFourthSwing,
+    ArpEighthSwing, ArpSixteenthSwing, ArpThirtysecondSwing
+  };
+
+  for (int value = 0; value < 19; ++value) {
     receivedNrpn(236, value, 0);
 
-    CHECK_EQ((int)Global.arpTempo, (int)arpTempoOrder[value]);
-    CHECK_EQ(isArpeggiatorSlowMode(), value <= 6);
+    CHECK_EQ((int)Global.arpTempo, (int)expectedRates[value]);
 
     // Query the currently selected rate through NRPN 299.
     host::clearSerialOutput();
@@ -146,6 +158,6 @@ TEST(nrpn_236_selects_and_reports_all_arpeggiator_rates) {
 
   // An out-of-range value must leave the selection unchanged.
   ArpeggiatorStepTempo previous = Global.arpTempo;
-  receivedNrpn(236, 15, 0);
+  receivedNrpn(236, 19, 0);
   CHECK_EQ((int)Global.arpTempo, (int)previous);
 }

@@ -137,6 +137,17 @@ void reset(byte model) {
   controlModeActive = false;
   initializeCalibrationData();
   initializeSequencer();
+  // Each test starts with factory-default clock and transport state.
+  autoClockMode = false;
+  externalClockActive = false;
+  transportReceiveEnabled = false;
+  transportArpRunning = true;
+  midiClockStatus = midiClockOff;
+  lastMidiClockTime = 0;
+  midiClockMessageCount = 0;
+  initialMidiClockMessageCount = 0;
+  receivedSongPositionPointer = false;
+  arpClockNeedsSync = false;
   ::reset();
   initializeCalibrationSamples();
   applyConfiguration();
